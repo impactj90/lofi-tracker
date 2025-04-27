@@ -8,7 +8,11 @@ import (
 
 type mockDB struct {
     ActiveSession *db.Session
+    Paused        bool
+
     CreateSessionCalled bool
+    PauseSessionCalled  bool
+    ResumeSessionCalled bool
 }
 
 func (m *mockDB) CreateSession(branch string, startTime time.Time) (int64, error) {
@@ -34,10 +38,16 @@ func (m *mockDB) GetActiveSession() (*db.Session, error) {
 }
 
 func (m *mockDB) PauseSession(sessionID int64, pauseStart time.Time) (int64, error) {
-    return 0, nil
+    m.Paused = true
+    m.PauseSessionCalled = true
+    m.ActiveSession.IsPaused = true
+    return 1, nil
 }
 
-func (m *mockDB) ResumeSession(pauseID int64, pauseEnd time.Time) error {
+func (m *mockDB) ResumeSession(sessionID int64, pauseEnd time.Time) error {
+    m.Paused = false
+    m.ResumeSessionCalled = true
+    m.ActiveSession.IsPaused = false
     return nil
 }
 

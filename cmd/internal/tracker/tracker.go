@@ -60,7 +60,21 @@ func (t *tracker) Pause() error {
 
 // Resume implements Tracker.
 func (t *tracker) Resume() error {
-	panic("unimplemented")
+	activeSession, err := t.db.GetActiveSession()
+	if err != nil && !errors.Is(err, db.ErrNoActiveSession) {
+		return err
+	}
+
+	if activeSession == nil {
+		return db.ErrNoActiveSession
+	}
+
+	err = t.db.ResumeSession(activeSession.ID, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	
+	return nil
 }
 
 // Start implements Tracker.

@@ -24,5 +24,5 @@ type DB interface {
     CompleteSession(sessionID int64, endTime time.Time) error
     GetActiveSession() (*Session, error)
     PauseSession(sessionID int64, pauseStart time.Time) (int64, error)
-    ResumeSession(pauseID int64, pauseEnd time.Time) error
+    ResumeSession(sessionID int64, pauseEnd time.Time) error
 }

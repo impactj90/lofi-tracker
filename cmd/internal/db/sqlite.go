@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"time"
@@ -72,12 +73,42 @@ func (s *sqliteDB) PauseSession(sessionID int64, pauseStart time.Time) (int64, e
 		return 0, err
 	}
 
+	_, err = s.db.Exec(`UPDATE sessions SET is_paused = 1 WHERE id = ?`, sessionID)
+	if err != nil {
+		return 0, err
+	}
+
 	return id, nil
 }
 
 // ResumeSession implements DB.
-func (s *sqliteDB) ResumeSession(pauseID int64, pauseEnd time.Time) error {
-	panic("unimplemented")
+func (s *sqliteDB) ResumeSession(sessionID int64, pauseEnd time.Time) error {
+	var pauseID int64
+
+	err := s.db.QueryRow(`
+		SELECT id FROM pauses 
+		WHERE session_id = ? AND pause_end IS NULL
+		ORDER BY pause_start DESC
+		LIMIT 1
+		`, sessionID).Scan(&pauseID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNoPausedSession
+		}
+		return err
+	}
+
+	_, err = s.db.Exec(`UPDATE pauses SET pause_end = ? WHERE id = ?`, pauseEnd, pauseID)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(`UPDATE sessions SET is_paused = 0 WHERE id = ?`, pauseID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *sqliteDB) migrate() error {
