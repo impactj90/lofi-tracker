@@ -12,7 +12,7 @@ M = $(shell printf "\033[34;1m->\033[0m")
 # Build the binary
 .PHONY: build
 build: $(BIN_DIR) ; $(info $(M) building $(BINARY_NAME)...) ## Build the core binary
-	$(Q)CGO_ENABLED=0 $(GO) build \
+	$(Q)CGO_ENABLED=1 $(GO) build \
 		-ldflags '-X main.Version=$(VERSION) -s -w' \
 		-o $(BIN_DIR)/$(BINARY_NAME) ./cmd/tracker
 

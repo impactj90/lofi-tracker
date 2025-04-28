@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/impactj90/lofi-tracker/cmd/internal/db"
@@ -36,7 +37,35 @@ func NewTracker(repoName string, db db.DB) Tracker {
 
 // Complete implements Tracker.
 func (t *tracker) Complete() (SessionStatus, error) {
-	panic("unimplemented")
+	activeSession, err := t.db.GetActiveSession()
+	if err != nil && !errors.Is(err, db.ErrNoActiveSession) {
+		return SessionStatus{}, err
+	}
+
+	if activeSession == nil {
+		return SessionStatus{}, db.ErrNoActiveSession
+	}
+
+	endTime := time.Now().UTC()
+	err = t.db.CompleteSession(activeSession.ID, endTime)
+	if err != nil {
+		return SessionStatus{}, err
+	}
+
+	updatedSession, err := t.db.GetActiveSession()
+	if err != nil {
+		return SessionStatus{}, err
+	}
+
+	fmt.Printf("✅ Completed session on branch '%s'\n", updatedSession.Branch)
+	fmt.Printf("🕒 Total work time: %s\n", FormatDuration(endTime.Sub(updatedSession.StartTime)))
+
+	return SessionStatus{
+		Branch:        updatedSession.Branch,
+		StartedAt:     updatedSession.StartTime,
+		TotalDuration: endTime.Sub(updatedSession.StartTime),
+		IsPaused:      updatedSession.IsPaused,
+	}, nil
 }
 
 // Pause implements Tracker.
@@ -49,12 +78,12 @@ func (t *tracker) Pause() error {
 	if activeSession == nil {
 		return db.ErrNoActiveSession
 	}
-	
+
 	_, err = t.db.PauseSession(activeSession.ID, time.Now().UTC())
 	if err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -73,7 +102,7 @@ func (t *tracker) Resume() error {
 	if err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 

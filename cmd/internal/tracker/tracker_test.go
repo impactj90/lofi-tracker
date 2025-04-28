@@ -79,3 +79,34 @@ func TestResume_WhenSessionIsPaused_ShouldResumeSession(t *testing.T) {
         t.Errorf("expected session to be resumed (IsPaused=false), but IsPaused is still true")
     }
 }
+
+
+func TestComplete_WhenActiveSessionExists_ShouldCompleteSession(t *testing.T) {
+	mock := &mockDB{
+		ActiveSession: &db.Session{
+			ID:        1,
+			Branch:    "feature/test",
+			StartTime: time.Now().Add(-2 * time.Hour), // Assume started 2 hours ago
+			IsPaused:  false,
+		},
+	}
+
+	tracker := NewTracker("lofi-tracker", mock)
+
+	status, err := tracker.Complete()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if status.Branch != "feature/test" {
+		t.Errorf("expected branch 'feature/test', got %s", status.Branch)
+	}
+
+	if status.TotalDuration < 2*time.Hour {
+		t.Errorf("expected at least 2 hours of work, got %v", status.TotalDuration)
+	}
+
+	if status.IsPaused {
+		t.Errorf("expected session to be not paused after completion")
+	}
+}

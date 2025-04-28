@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/impactj90/lofi-tracker/cmd/internal/db"
 	"github.com/impactj90/lofi-tracker/cmd/internal/git"
@@ -40,7 +41,7 @@ var startCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("✅ Started tracking on branch '%s'\n", branchName)
+		fmt.Printf("✅ Started tracking on branch '%s' at %s\n", branchName, time.Now().UTC().Format(time.RFC3339))
 	},
 }
 

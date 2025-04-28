@@ -3,9 +3,12 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type sqliteDB struct {
@@ -19,11 +22,13 @@ func NewSQLiteDB(dbPath string) (DB, error) {
 
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
+		fmt.Printf("❌ Failed to open database: %v\n", err)
 		return nil, ErrFailedToOpenDatabase
 	}
 
 	sdb := &sqliteDB{db: db}
 	if err := sdb.migrate(); err != nil {
+		fmt.Printf("❌ Failed to migrate database: %v\n", err)
 		return nil, ErrFailedToMigrateDatabase
 	}
 
@@ -32,7 +37,12 @@ func NewSQLiteDB(dbPath string) (DB, error) {
 
 // CompleteSession implements DB.
 func (s *sqliteDB) CompleteSession(sessionID int64, endTime time.Time) error {
-	panic("unimplemented")
+	_, err := s.db.Exec(`UPDATE session SET end_time = ?, is_paused = 0 WHERE id = ?`, endTime, sessionID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // CreateSession implements DB.
@@ -55,7 +65,42 @@ func (s *sqliteDB) CreateSession(branch string, startTime time.Time) (int64, err
 
 // GetActiveSession implements DB.
 func (s *sqliteDB) GetActiveSession() (*Session, error) {
-	panic("unimplemented")
+	var sessionID int64
+	var branch string
+	var startTime time.Time
+	var endTime *time.Time
+	var isPaused bool
+
+	err := s.db.QueryRow(`
+		SELECT id, branch, start_time, end_time, is_paused
+		FROM sessions
+		WHERE end_time IS NULL
+		ORDER BY start_time DESC
+		LIMIT 1
+		`).Scan(&sessionID, &branch, &startTime, &endTime, &isPaused)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNoActiveSession
+		}
+		return nil, err
+	}
+
+	if endTime != nil {
+		return &Session{
+			ID:        sessionID,
+			Branch:    branch,
+			StartTime: startTime,
+			Endtime:   endTime,
+			IsPaused:  isPaused,
+		}, nil
+	}
+
+	return &Session{
+		ID:        sessionID,
+		Branch:    branch,
+		StartTime: startTime,
+		IsPaused:  isPaused,
+	}, nil
 }
 
 // PauseSession implements DB.
@@ -103,7 +148,7 @@ func (s *sqliteDB) ResumeSession(sessionID int64, pauseEnd time.Time) error {
 		return err
 	}
 
-	_, err = s.db.Exec(`UPDATE sessions SET is_paused = 0 WHERE id = ?`, pauseID)
+	_, err = s.db.Exec(`UPDATE sessions SET is_paused = 0 WHERE id = ?`, sessionID)
 	if err != nil {
 		return err
 	}
