@@ -1,4 +1,4 @@
-# 🕰️ Lofi Tracker
+# 🕰️ Lofi Tracker -- WIP --
 
 Lofi Tracker is a minimal, Git-aware CLI time tracker built for developers who want to **stay in flow** and automatically track time on Jira tickets without breaking their rhythm.
 
