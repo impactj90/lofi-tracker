@@ -51,3 +51,7 @@ func (m *mockDB) ResumeSession(sessionID int64, pauseEnd time.Time) error {
     return nil
 }
 
+func (m *mockDB) Close() error {
+    return nil
+}
+

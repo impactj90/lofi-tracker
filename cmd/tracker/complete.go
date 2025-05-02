@@ -4,8 +4,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/impactj90/lofi-tracker/cmd/internal/db"
-	"github.com/impactj90/lofi-tracker/cmd/internal/git"
 	"github.com/impactj90/lofi-tracker/cmd/internal/tracker"
 	"github.com/spf13/cobra"
 )
@@ -18,21 +16,15 @@ var completeCmd = &cobra.Command{
 	Use:   "complete",
 	Short: "Complete tracking",
 	Run: func(cmd *cobra.Command, args []string) {
-		dbPath := getDBPath()
-		dbConn, err := db.NewSQLiteDB(dbPath)
+		tr, _, err := tracker.Init()
 		if err != nil {
-			fmt.Printf("Failed to open database: %v\n", err)
+			fmt.Printf("❌ Failed to initialize tracker: %v\n", err)
 			return
 		}
 
-		branchName, err := git.GetCurrentBranchName()
-		if err != nil {
-			fmt.Printf("Failed to get current branch name: %v\n", err)
-			return
-		}
+		defer tr.Close()
 
-		t := tracker.NewTracker(branchName, dbConn)
-		status, err := t.Complete()
+		status, err := tr.Complete()
 		if err != nil {
 			fmt.Printf("❌ Failed to complete tracking: %v\n", err)
 			return

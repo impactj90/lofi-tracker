@@ -3,9 +3,6 @@ package main
 
 import (
 	"fmt"
-
-	"github.com/impactj90/lofi-tracker/cmd/internal/db"
-	"github.com/impactj90/lofi-tracker/cmd/internal/git"
 	"github.com/impactj90/lofi-tracker/cmd/internal/tracker"
 	"github.com/spf13/cobra"
 )
@@ -18,21 +15,15 @@ var pauseCmd = &cobra.Command{
 	Use:   "pause",
 	Short: "Pause tracking",
 	Run: func(cmd *cobra.Command, args []string) {
-		dbPath := getDBPath()
-		dbConn, err := db.NewSQLiteDB(dbPath)
+		tr, branchName, err := tracker.Init()
 		if err != nil {
-			fmt.Printf("Failed to open database: %v\n", err)
+			fmt.Printf("❌ Failed to initialize tracker: %v\n", err)
 			return
 		}
 
-		branchName, err := git.GetCurrentBranchName()
-		if err != nil {
-			fmt.Printf("Failed to get current branch name: %v\n", err)
-			return
-		}
+		defer tr.Close()
 
-		tracker := tracker.NewTracker(branchName, dbConn)
-		tracker.Pause()
+		err = tr.Pause()
 		if err != nil {
 			fmt.Printf("❌ Failed to pause tracking: %v\n", err)
 			return

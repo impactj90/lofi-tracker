@@ -14,6 +14,7 @@ type Tracker interface {
 	Resume() error
 	Status() (SessionStatus, error)
 	Complete() (SessionStatus, error)
+	Close() error
 }
 
 type SessionStatus struct {
@@ -42,29 +43,18 @@ func (t *tracker) Complete() (SessionStatus, error) {
 		return SessionStatus{}, err
 	}
 
+	fmt.Printf("Completing session %d\n", activeSession.ID)
 	if activeSession == nil {
 		return SessionStatus{}, db.ErrNoActiveSession
 	}
 
 	endTime := time.Now().UTC()
-	err = t.db.CompleteSession(activeSession.ID, endTime)
-	if err != nil {
-		return SessionStatus{}, err
-	}
-
-	updatedSession, err := t.db.GetActiveSession()
-	if err != nil {
-		return SessionStatus{}, err
-	}
-
-	fmt.Printf("✅ Completed session on branch '%s'\n", updatedSession.Branch)
-	fmt.Printf("🕒 Total work time: %s\n", FormatDuration(endTime.Sub(updatedSession.StartTime)))
 
 	return SessionStatus{
-		Branch:        updatedSession.Branch,
-		StartedAt:     updatedSession.StartTime,
-		TotalDuration: endTime.Sub(updatedSession.StartTime),
-		IsPaused:      updatedSession.IsPaused,
+		Branch:        activeSession.Branch,
+		StartedAt:     activeSession.StartTime,
+		TotalDuration: endTime.Sub(activeSession.StartTime),
+		IsPaused:      activeSession.IsPaused,
 	}, nil
 }
 
@@ -127,5 +117,22 @@ func (t *tracker) Start(branch string) error {
 
 // Status implements Tracker.
 func (t *tracker) Status() (SessionStatus, error) {
-	panic("unimplemented")
+	activeSession, err := t.db.GetActiveSession()
+	if err != nil && !errors.Is(err, db.ErrNoActiveSession) {
+		return SessionStatus{}, err
+	}
+	if activeSession == nil {
+		return SessionStatus{}, db.ErrNoActiveSession
+	}
+
+	return SessionStatus{
+		Branch:        activeSession.Branch,
+		StartedAt:     activeSession.StartTime,
+		TotalDuration: time.Now().UTC().Sub(activeSession.StartTime),
+		IsPaused:      activeSession.IsPaused,
+	}, nil
+}
+
+func (t *tracker) Close() error {
+	return t.db.Close()
 }

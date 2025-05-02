@@ -37,7 +37,8 @@ func NewSQLiteDB(dbPath string) (DB, error) {
 
 // CompleteSession implements DB.
 func (s *sqliteDB) CompleteSession(sessionID int64, endTime time.Time) error {
-	_, err := s.db.Exec(`UPDATE session SET end_time = ?, is_paused = 0 WHERE id = ?`, endTime, sessionID)
+	fmt.Printf("CompleteSession(%d, %v)\n", sessionID, endTime)
+	_, err := s.db.Exec(`UPDATE sessions SET end_time = ?, is_paused = 0 WHERE id = ?`, endTime, sessionID)
 	if err != nil {
 		return err
 	}
@@ -106,9 +107,9 @@ func (s *sqliteDB) GetActiveSession() (*Session, error) {
 // PauseSession implements DB.
 func (s *sqliteDB) PauseSession(sessionID int64, pauseStart time.Time) (int64, error) {
 	res, err := s.db.Exec(`
-		INSERT INTO pauses (session_id, pause_start, pause_end, created_at, updated_at)
-		VALUES (?, ?, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		`, sessionID, pauseStart)
+		INSERT INTO pauses (pause_start, pause_end, session_id)
+		VALUES (?, NULL, ?)
+		`, pauseStart, sessionID)
 	if err != nil {
 		return 0, err
 	}
@@ -154,6 +155,10 @@ func (s *sqliteDB) ResumeSession(sessionID int64, pauseEnd time.Time) error {
 	}
 
 	return nil
+}
+
+func (s *sqliteDB) Close() error {
+	return s.db.Close()
 }
 
 func (s *sqliteDB) migrate() error {
