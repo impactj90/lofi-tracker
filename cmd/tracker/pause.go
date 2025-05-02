@@ -23,7 +23,7 @@ var pauseCmd = &cobra.Command{
 
 		defer tr.Close()
 
-		err = tr.Pause()
+		err = tr.Pause(false)
 		if err != nil {
 			fmt.Printf("❌ Failed to pause tracking: %v\n", err)
 			return

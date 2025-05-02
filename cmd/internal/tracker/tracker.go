@@ -10,7 +10,7 @@ import (
 
 type Tracker interface {
 	Start(branch string) error
-	Pause() error
+	Pause(isAfk bool) error
 	Resume() error
 	Status() (SessionStatus, error)
 	Complete() (SessionStatus, error)
@@ -22,6 +22,7 @@ type SessionStatus struct {
 	StartedAt     time.Time
 	TotalDuration time.Duration
 	IsPaused      bool
+	IsAfk         bool
 }
 
 type tracker struct {
@@ -54,12 +55,13 @@ func (t *tracker) Complete() (SessionStatus, error) {
 		Branch:        activeSession.Branch,
 		StartedAt:     activeSession.StartTime,
 		TotalDuration: endTime.Sub(activeSession.StartTime),
-		IsPaused:      activeSession.IsPaused,
+		IsPaused:      false,
+		IsAfk:         false,
 	}, nil
 }
 
 // Pause implements Tracker.
-func (t *tracker) Pause() error {
+func (t *tracker) Pause(isAfk bool) error {
 	activeSession, err := t.db.GetActiveSession()
 	if err != nil && !errors.Is(err, db.ErrNoActiveSession) {
 		return err
@@ -69,7 +71,7 @@ func (t *tracker) Pause() error {
 		return db.ErrNoActiveSession
 	}
 
-	_, err = t.db.PauseSession(activeSession.ID, time.Now().UTC())
+	_, err = t.db.PauseSession(activeSession.ID, time.Now().UTC(), isAfk)
 	if err != nil {
 		return err
 	}
@@ -130,6 +132,7 @@ func (t *tracker) Status() (SessionStatus, error) {
 		StartedAt:     activeSession.StartTime,
 		TotalDuration: time.Now().UTC().Sub(activeSession.StartTime),
 		IsPaused:      activeSession.IsPaused,
+		IsAfk:         activeSession.IsAfk,
 	}, nil
 }
 
