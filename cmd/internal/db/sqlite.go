@@ -71,14 +71,15 @@ func (s *sqliteDB) GetActiveSession() (*Session, error) {
 	var startTime time.Time
 	var endTime *time.Time
 	var isPaused bool
+	var isAfk bool
 
 	err := s.db.QueryRow(`
-		SELECT id, branch, start_time, end_time, is_paused
+		SELECT id, branch, start_time, end_time, is_paused, is_afk
 		FROM sessions
 		WHERE end_time IS NULL
 		ORDER BY start_time DESC
 		LIMIT 1
-		`).Scan(&sessionID, &branch, &startTime, &endTime, &isPaused)
+		`).Scan(&sessionID, &branch, &startTime, &endTime, &isPaused, &isAfk)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNoActiveSession
@@ -93,6 +94,7 @@ func (s *sqliteDB) GetActiveSession() (*Session, error) {
 			StartTime: startTime,
 			Endtime:   endTime,
 			IsPaused:  isPaused,
+			IsAfk:     isAfk,
 		}, nil
 	}
 
@@ -101,6 +103,7 @@ func (s *sqliteDB) GetActiveSession() (*Session, error) {
 		Branch:    branch,
 		StartTime: startTime,
 		IsPaused:  isPaused,
+		IsAfk:     isAfk,
 	}, nil
 }
 
@@ -119,7 +122,7 @@ func (s *sqliteDB) PauseSession(sessionID int64, pauseStart time.Time, isAfk boo
 		return 0, err
 	}
 
-	_, err = s.db.Exec(`UPDATE sessions SET is_paused = 1, is_afk = 1 WHERE id = ?`, sessionID)
+	_, err = s.db.Exec(`UPDATE sessions SET is_paused = 1, is_afk = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, sessionID)
 	if err != nil {
 		return 0, err
 	}

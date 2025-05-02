@@ -55,7 +55,8 @@ func (t *tracker) Complete() (SessionStatus, error) {
 		Branch:        activeSession.Branch,
 		StartedAt:     activeSession.StartTime,
 		TotalDuration: endTime.Sub(activeSession.StartTime),
-		IsPaused:      activeSession.IsPaused,
+		IsPaused:      false,
+		IsAfk:         false,
 	}, nil
 }
 
@@ -131,6 +132,7 @@ func (t *tracker) Status() (SessionStatus, error) {
 		StartedAt:     activeSession.StartTime,
 		TotalDuration: time.Now().UTC().Sub(activeSession.StartTime),
 		IsPaused:      activeSession.IsPaused,
+		IsAfk:         activeSession.IsAfk,
 	}, nil
 }
 

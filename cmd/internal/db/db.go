@@ -8,6 +8,7 @@ type Session struct {
 	StartTime time.Time
 	Endtime   *time.Time
 	IsPaused  bool
+	IsAfk     bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
