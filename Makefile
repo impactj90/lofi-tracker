@@ -3,6 +3,7 @@ BINARY_NAME := core
 VERSION ?= $(shell cat version)
 BIN_DIR := $(CURDIR)/bin
 TMP_BIN_DIR := /tmp/bin
+MAIN_FILE := ./cmd/tracker
 GO := go
 
 # For prettier output
@@ -14,7 +15,7 @@ M = $(shell printf "\033[34;1m->\033[0m")
 build: $(BIN_DIR) ; $(info $(M) building $(BINARY_NAME)...) ## Build the core binary
 	$(Q)CGO_ENABLED=1 $(GO) build \
 		-ldflags '-X main.Version=$(VERSION) -s -w' \
-		-o $(BIN_DIR)/$(BINARY_NAME) ./cmd/tracker
+		-o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_FILE)
 
 # Create directories
 $(BIN_DIR):
@@ -52,7 +53,7 @@ lint-install: ; $(info $(M) installing golangci-lint...) ## Install golangci-lin
 build-air: $(TMP_BIN_DIR) ; $(info $(M) building for air hot-reload...) @ ## Build for air hot-reload
 	$Q CGO_ENABLED=0 $(GO) build \
 		-ldflags '-X main.Version=$(VERSION) -s -w' \
-		-o $(TMP_BIN_DIR)/$(BINARY_NAME) ./cmd/tracker
+		-o $(TMP_BIN_DIR)/$(BINARY_NAME) $(MAIN_FILE)
 
 # Run with air for hot-reload
 .PHONY: run/live

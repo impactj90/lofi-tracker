@@ -105,7 +105,7 @@ func (s *sqliteDB) GetActiveSession() (*Session, error) {
 }
 
 // PauseSession implements DB.
-func (s *sqliteDB) PauseSession(sessionID int64, pauseStart time.Time) (int64, error) {
+func (s *sqliteDB) PauseSession(sessionID int64, pauseStart time.Time, isAfk bool) (int64, error) {
 	res, err := s.db.Exec(`
 		INSERT INTO pauses (pause_start, pause_end, session_id)
 		VALUES (?, NULL, ?)
@@ -119,7 +119,7 @@ func (s *sqliteDB) PauseSession(sessionID int64, pauseStart time.Time) (int64, e
 		return 0, err
 	}
 
-	_, err = s.db.Exec(`UPDATE sessions SET is_paused = 1 WHERE id = ?`, sessionID)
+	_, err = s.db.Exec(`UPDATE sessions SET is_paused = 1, is_afk = 1 WHERE id = ?`, sessionID)
 	if err != nil {
 		return 0, err
 	}
@@ -149,7 +149,7 @@ func (s *sqliteDB) ResumeSession(sessionID int64, pauseEnd time.Time) error {
 		return err
 	}
 
-	_, err = s.db.Exec(`UPDATE sessions SET is_paused = 0 WHERE id = ?`, sessionID)
+	_, err = s.db.Exec(`UPDATE sessions SET is_paused = 0, is_afk = 0 WHERE id = ?`, sessionID)
 	if err != nil {
 		return err
 	}
@@ -169,6 +169,7 @@ func (s *sqliteDB) migrate() error {
         start_time TIMESTAMP NOT NULL,
         end_time TIMESTAMP,
         is_paused BOOLEAN DEFAULT 0,
+		is_afk BOOLEAN default 0, 
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );

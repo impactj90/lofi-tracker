@@ -38,7 +38,7 @@ func TestPause_WhenActiveSessionExists_ShouldPauseSession(t *testing.T) {
 
 	tracker := NewTracker("lofi-tracker", mock)
 
-	err := tracker.Pause()
+	err := tracker.Pause(false)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
