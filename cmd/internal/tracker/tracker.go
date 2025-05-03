@@ -2,7 +2,6 @@ package tracker
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/impactj90/lofi-tracker/cmd/internal/db"
@@ -44,12 +43,15 @@ func (t *tracker) Complete() (SessionStatus, error) {
 		return SessionStatus{}, err
 	}
 
-	fmt.Printf("Completing session %d\n", activeSession.ID)
 	if activeSession == nil {
 		return SessionStatus{}, db.ErrNoActiveSession
 	}
 
 	endTime := time.Now().UTC()
+	t.db.CompleteSession(activeSession.ID, endTime)
+	if err != nil {
+		return SessionStatus{}, err
+	}
 
 	return SessionStatus{
 		Branch:        activeSession.Branch,
@@ -123,6 +125,7 @@ func (t *tracker) Status() (SessionStatus, error) {
 	if err != nil && !errors.Is(err, db.ErrNoActiveSession) {
 		return SessionStatus{}, err
 	}
+
 	if activeSession == nil {
 		return SessionStatus{}, db.ErrNoActiveSession
 	}
