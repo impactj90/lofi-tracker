@@ -34,7 +34,7 @@ func main() {
 	daemon := afk.Daemon{
 		Afk: &afk.AfkWatcher{
 			Tracker:       tr,
-			IdleThreshold: time.Second * 15,
+			IdleThreshold: time.Minute * 15,
 			IsAfkActive:   false,
 		},
 	}
