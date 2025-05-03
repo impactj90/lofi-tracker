@@ -72,6 +72,7 @@ func (a *AfkWatcher) watchForResume(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			return nil
 		case <-ticker.C:
 			idleTime, err := GetIdleTime()
 			if err != nil {
