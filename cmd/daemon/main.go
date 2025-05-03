@@ -6,8 +6,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/impactj90/lofi-tracker/cmd/internal/afk"
+	"github.com/impactj90/lofi-tracker/cmd/internal/tracker"
 )
 
 func main() {
@@ -23,9 +25,22 @@ func main() {
 		cancel()
 	}()
 
-	afk.Run(ctx)
+	tr, _, err := tracker.Init()
+	if err != nil {
+		fmt.Printf("Error initializing Tracker: %v", err)
+		os.Exit(1)
+	}
+
+	daemon := afk.Daemon{
+		Afk: &afk.AfkWatcher{
+			Tracker:       tr,
+			IdleThreshold: time.Minute * 15,
+			IsAfkActive:   false,
+		},
+	}
+
+	daemon.Run(ctx)
 
 	<-ctx.Done()
 	fmt.Println("lofi-tracker daemon exited")
 }
-

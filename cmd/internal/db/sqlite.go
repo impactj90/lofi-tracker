@@ -37,8 +37,7 @@ func NewSQLiteDB(dbPath string) (DB, error) {
 
 // CompleteSession implements DB.
 func (s *sqliteDB) CompleteSession(sessionID int64, endTime time.Time) error {
-	fmt.Printf("CompleteSession(%d, %v)\n", sessionID, endTime)
-	_, err := s.db.Exec(`UPDATE sessions SET end_time = ?, is_paused = 0 WHERE id = ?`, endTime, sessionID)
+	_, err := s.db.Exec(`UPDATE sessions SET end_time = ?, is_paused = 0, is_afk = 0 WHERE id = ?`, endTime, sessionID)
 	if err != nil {
 		return err
 	}
