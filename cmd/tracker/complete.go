@@ -16,7 +16,6 @@ var completeCmd = &cobra.Command{
 	Use:   "complete",
 	Short: "Complete tracking",
 	Run: func(cmd *cobra.Command, args []string) {
-		//TODO: complete is somehow buggy. chekc this out next time
 		tr, _, err := tracker.Init()
 		if err != nil {
 			fmt.Printf("❌ Failed to initialize tracker: %v\n", err)
