@@ -34,8 +34,12 @@ func main() {
 	daemon := afk.Daemon{
 		Afk: &afk.AfkWatcher{
 			Tracker:       tr,
-			IdleThreshold: time.Minute * 15,
+			IdleThreshold: time.Second * 15,
 			IsAfkActive:   false,
+		},
+		BranchWatcher: &afk.BranchWatcher{
+			Tracker: tr, 
+			CheckInterval: time.Second * 5,
 		},
 	}
 
