@@ -39,7 +39,7 @@ func main() {
 		},
 		BranchWatcher: &afk.BranchWatcher{
 			Tracker: tr, 
-			CheckInterval: time.Second * 5,
+			CheckInterval: time.Second * 1,
 		},
 	}
 

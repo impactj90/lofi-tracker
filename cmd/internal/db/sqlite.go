@@ -159,6 +159,47 @@ func (s *sqliteDB) ResumeSession(sessionID int64, pauseEnd time.Time) error {
 	return nil
 }
 
+func (s *sqliteDB) ResumeOrCreateSession(branch string, resumeTime time.Time) (int64, error) {
+	var sessionID int64
+
+	err := s.db.QueryRow(`
+		SELECT id FROM sessions
+		WHERE branch = ? AND is_paused = 1 AND end_time IS NULL
+		ORDER BY start_time DESC
+		LIMIT 1
+	`, branch).Scan(&sessionID)
+
+	switch {
+	case err == sql.ErrNoRows:
+		res, err := s.db.Exec(`
+			INSERT INTO sessions (branch, start_time, is_paused, created_at, updated_at)
+			VALUES (?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		`, branch, resumeTime)
+		if err != nil {
+			return 0, fmt.Errorf("failed to create new session: %w", err)
+		}
+		newID, err := res.LastInsertId()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get last insert id: %w", err)
+		}
+		return newID, nil
+
+	case err != nil:
+		return 0, fmt.Errorf("failed to query for paused session: %w", err)
+	}
+
+	_, err = s.db.Exec(`
+		UPDATE sessions
+		SET is_paused = 0, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, sessionID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to resume paused session: %w", err)
+	}
+
+	return sessionID, nil
+}
+
 func (s *sqliteDB) Close() error {
 	return s.db.Close()
 }

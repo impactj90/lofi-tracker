@@ -26,5 +26,6 @@ type DB interface {
 	GetActiveSession() (*Session, error)
 	PauseSession(sessionID int64, pauseStart time.Time, isAfk bool) (int64, error)
 	ResumeSession(sessionID int64, pauseEnd time.Time) error
+	GetMostRecentPausedSessionByBranch(branchName string) (*Session, error)
 	Close() error
 }

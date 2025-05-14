@@ -14,6 +14,7 @@ type Tracker interface {
 	Status() (SessionStatus, error)
 	Complete() (SessionStatus, error)
 	Close() error
+	ResumeOrCreateSession(branchName string) (int64, error)
 }
 
 type SessionStatus struct {
@@ -98,6 +99,24 @@ func (t *tracker) Resume() error {
 	}
 
 	return nil
+}
+
+func (t *tracker) ResumeOrCreateSession(branchName string) (int64, error) {
+	activeSession, err := t.db.GetActiveSession()
+	if err != nil && !errors.Is(err, db.ErrNoActiveSession) {
+		return 0, err
+	}
+
+	if activeSession == nil {
+		return 0, db.ErrNoActiveSession
+	}
+
+	sessionId, err := t.db.ResumeOrCreateSession(branchName, time.Now())
+	if err != nil {
+		return 0, err
+	}
+
+	return sessionId, nil
 }
 
 // Start implements Tracker.
