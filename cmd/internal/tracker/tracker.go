@@ -47,8 +47,30 @@ func (t *tracker) Complete() (SessionStatus, error) {
 		return SessionStatus{}, db.ErrNoActiveSession
 	}
 
+	pauses, err := t.db.GetPausesBySessionId(activeSession.ID)
+	if err != nil {
+		return SessionStatus{}, err
+	}
+
 	endTime := time.Now().UTC()
-	t.db.CompleteSession(activeSession.ID, endTime)
+	var totalPauseTime time.Duration
+
+	for _, pause := range pauses {
+		var pauseDuration time.Duration
+		if pause.PauseEnd == nil {
+			pauseDuration = endTime.Sub(pause.PauseStart)
+		} else {
+			pauseDuration = pause.PauseEnd.Sub(pause.PauseStart)
+		}
+
+		totalPauseTime += pauseDuration
+	}
+
+	totalTime := endTime.Sub(activeSession.StartTime)
+	workTime := totalTime - totalPauseTime
+	workDurationSeconds := int64(workTime.Seconds())
+
+	t.db.CompleteSession(activeSession.ID, endTime, workDurationSeconds)
 	if err != nil {
 		return SessionStatus{}, err
 	}
@@ -56,7 +78,7 @@ func (t *tracker) Complete() (SessionStatus, error) {
 	return SessionStatus{
 		Branch:        activeSession.Branch,
 		StartedAt:     activeSession.StartTime,
-		TotalDuration: endTime.Sub(activeSession.StartTime),
+		TotalDuration: workTime,
 		IsPaused:      false,
 		IsAfk:         false,
 	}, nil

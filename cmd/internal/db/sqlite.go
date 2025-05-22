@@ -36,8 +36,11 @@ func NewSQLiteDB(dbPath string) (DB, error) {
 }
 
 // CompleteSession implements DB.
-func (s *sqliteDB) CompleteSession(sessionID int64, endTime time.Time) error {
-	_, err := s.db.Exec(`UPDATE sessions SET end_time = ?, is_paused = 0, is_afk = 0 WHERE id = ?`, endTime, sessionID)
+func (s *sqliteDB) CompleteSession(sessionID int64, endTime time.Time, workDuration int64) error {
+	_, err := s.db.Exec(`
+		UPDATE sessions 
+		SET end_time = ?, work_duration_seconds = ?, is_paused = 0, is_afk = 0 
+		WHERE id = ?`, endTime, workDuration, sessionID)
 	if err != nil {
 		return err
 	}
@@ -159,6 +162,38 @@ func (s *sqliteDB) ResumeSession(sessionID int64, pauseEnd time.Time) error {
 	return nil
 }
 
+func (s *sqliteDB) GetPausesBySessionId(sessionID int64) ([]Pause, error) {
+	var pauses []Pause
+
+	rows, err := s.db.Query(`
+		SELECT id, session_id, pause_start, pause_end 
+		FROM pauses 
+		WHERE session_id = ?
+		ORDER BY pause_start DESC
+		`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var pause Pause
+		err := rows.Scan(
+			&pause.ID,
+			&pause.SessionID,
+			&pause.PauseStart,
+			&pause.PauseEnd,
+		)
+		if err != nil {
+			return nil, err
+		}
+		pauses = append(pauses, pause)
+	}
+
+	return pauses, nil
+}
+
 func (s *sqliteDB) Close() error {
 	return s.db.Close()
 }
@@ -172,6 +207,7 @@ func (s *sqliteDB) migrate() error {
         end_time TIMESTAMP,
         is_paused BOOLEAN DEFAULT 0,
 		is_afk BOOLEAN default 0, 
+		work_duration_seconds INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );

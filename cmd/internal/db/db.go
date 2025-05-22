@@ -22,9 +22,10 @@ type Pause struct {
 
 type DB interface {
 	CreateSession(branch string, startTime time.Time) (int64, error)
-	CompleteSession(sessionID int64, endTime time.Time) error
+	CompleteSession(sessionID int64, endTime time.Time, workDuration int64) error
 	GetActiveSession() (*Session, error)
 	PauseSession(sessionID int64, pauseStart time.Time, isAfk bool) (int64, error)
 	ResumeSession(sessionID int64, pauseEnd time.Time) error
+	GetPausesBySessionId(sessionID int64) ([]Pause, error)
 	Close() error
 }
