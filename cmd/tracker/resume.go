@@ -26,7 +26,7 @@ var resumeCmd = &cobra.Command{
 
 		err = tr.Resume()
 		if err != nil {
-			fmt.Printf("❌ Failed to pause tracking: %v\n", err)
+			fmt.Printf("❌ Failed to resume tracking: %v\n", err)
 			return
 		}
 

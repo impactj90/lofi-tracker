@@ -18,14 +18,6 @@ type AfkWatcher struct {
 }
 
 func (a *AfkWatcher) Start(ctx context.Context) error {
-	tr, _, err := tracker.Init()
-	if err != nil {
-		fmt.Printf("❌ Failed to initialize tracker: %v\n", err)
-		return err
-	}
-
-	defer tr.Close()
-
 	ticker := time.NewTicker(a.IdleThreshold)
 	defer ticker.Stop()
 	for {
