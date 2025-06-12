@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/impactj90/lofi-tracker/cmd/internal/db"
@@ -14,6 +15,11 @@ type Tracker interface {
 	Status() (SessionStatus, error)
 	Complete() (SessionStatus, error)
 	Close() error
+
+	GetDailySummary(date time.Time) ([]db.SummaryData, error)
+	GetWeeklySummary(startOfWeek time.Time) ([]db.SummaryData, error)
+	GetMonthlySummary(year int, month time.Month) ([]db.SummaryData, error)
+	GetBranchSummary(branch string, days int) (*db.SummaryData, error)
 }
 
 type SessionStatus struct {
@@ -141,4 +147,40 @@ func (t *tracker) Status() (SessionStatus, error) {
 
 func (t *tracker) Close() error {
 	return t.db.Close()
+}
+
+func (t *tracker) GetDailySummary(date time.Time) ([]db.SummaryData, error) {
+	return t.db.GetDailySummary(date)
+}
+
+func (t *tracker) GetWeeklySummary(startOfWeek time.Time) ([]db.SummaryData, error) {
+	return t.db.GetWeeklySummary(startOfWeek)
+}
+
+func (t *tracker) GetMonthlySummary(year int, month time.Month) ([]db.SummaryData, error) {
+	return t.db.GetMonthlySummary(year, month)
+}
+
+func (t *tracker) GetBranchSummary(branch string, days int) (*db.SummaryData, error) {
+	return t.db.GetBranchSummary(branch, days)
+}
+
+// Helper functions for summary formatting
+func FormatSummaryDuration(d time.Duration) string {
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+
+	if hours == 0 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	return fmt.Sprintf("%dh %dm", hours, minutes)
+}
+
+func FormatEfficiency(activeTime, totalTime time.Duration) string {
+	if totalTime == 0 {
+		return "0%"
+	}
+
+	efficiency := float64(activeTime) / float64(totalTime) * 100
+	return fmt.Sprintf("%.1f%%", efficiency)
 }
