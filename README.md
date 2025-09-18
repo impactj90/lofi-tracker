@@ -16,6 +16,9 @@ Designed to be simple, branch-driven, and background-aware, it allows you to tra
 - ✅ CLI and daemon architecture
 - ✅ OS-native desktop notifications (Linux, macOS, Windows)
 - ✅ Manual pause/resume support
+- ✅ Daemon auto-switches sessions to match the current Git branch (detached HEAD ➜ `detached-<sha>`)
+- ✅ Live status and summaries include in-progress session time
+- ✅ CSV export for arbitrary date ranges
 - 🧠 Tracks AFK vs. manual pauses separately
 - 🧪 Reliable state transitions (AFK-aware state machine)
 
@@ -110,6 +113,18 @@ lofi-tracker complete
 lofi-tracker status
 ```
 
+Shows the current branch, elapsed session time, and today's totals (including the live session).
+
+---
+
+### 🤝 Jump into meeting mode
+
+```bash
+lofi-tracker mm -b P2PMER-4
+```
+
+Force-completes the current session (if any) and starts tracking time on the specified meeting branch (defaults to `meeting`). Perfect for quick context switches when work isn't tied to a dev branch.
+
 ---
 
 ### 🧠 Background AFK detection (with OS notifications)
@@ -125,8 +140,20 @@ It:
 - Pauses your session if idle ≥ 14 minutes
 - Resumes it when you return
 - Sends OS notifications when paused/resumed
+- Keeps sessions aligned with your current Git branch (completes the old one and starts tracking the new branch automatically)
+- Falls back to `detached-<sha>` labels when you're working in a detached HEAD state
 
 > ✅ Works silently in background, notifies you visually
+
+---
+
+### 📦 Export tracked time
+
+```bash
+lofi-tracker export --from 2024-10-01 --to 2024-10-31 --output work.csv
+```
+
+Writes `date,ticket,minutes` rows to CSV (defaults to the current month when flags are omitted). Leave `--output` empty to stream the CSV to stdout.
 
 ---
 

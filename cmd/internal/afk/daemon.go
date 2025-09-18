@@ -13,4 +13,3 @@ func (d *Daemon) Run(ctx context.Context) {
 
 	<-ctx.Done()
 }
-

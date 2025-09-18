@@ -7,7 +7,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/impactj90/lofi-tracker/cmd/internal/db"
 	"github.com/impactj90/lofi-tracker/cmd/internal/tracker"
 	"github.com/spf13/cobra"
 )
@@ -86,58 +85,67 @@ func showBranchSummary(tr tracker.Tracker, branch string, days int) {
 }
 
 func showPeriodSummary(tr tracker.Tracker, period, currentBranch string) {
-	var summaries []db.SummaryData
-	var err error
-	var periodTitle string
+	var (
+		periodTitle string
+		startDate   time.Time
+		endDate     time.Time
+	)
+
+	now := time.Now().UTC()
 
 	switch strings.ToLower(period) {
 	case "today":
-		summaries, err = tr.GetDailySummary(time.Now())
+		startDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		endDate = startDate.Add(24 * time.Hour)
 		periodTitle = "Today"
 
 	case "yesterday":
-		yesterday := time.Now().AddDate(0, 0, -1)
-		summaries, err = tr.GetDailySummary(yesterday)
+		yesterday := now.AddDate(0, 0, -1)
+		startDate = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC)
+		endDate = startDate.Add(24 * time.Hour)
 		periodTitle = "Yesterday"
 
 	case "week":
-		// Get start of current week (Monday)
-		now := time.Now()
 		weekday := int(now.Weekday())
-		if weekday == 0 { // Sunday
+		if weekday == 0 {
 			weekday = 7
 		}
-		startOfWeek := now.AddDate(0, 0, -(weekday - 1))
-		startOfWeek = time.Date(startOfWeek.Year(), startOfWeek.Month(), startOfWeek.Day(), 0, 0, 0, 0, time.Local)
-
-		summaries, err = tr.GetWeeklySummary(startOfWeek)
+		startDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -(weekday - 1))
+		endDate = startDate.Add(7 * 24 * time.Hour)
 		periodTitle = "This Week"
 
 	case "month":
-		now := time.Now()
-		summaries, err = tr.GetMonthlySummary(now.Year(), now.Month())
+		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		endDate = startDate.AddDate(0, 1, 0)
 		periodTitle = "This Month"
 
 	default:
-		// Try to parse as date (YYYY-MM-DD)
 		date, parseErr := time.Parse("2006-01-02", period)
 		if parseErr != nil {
 			fmt.Printf("❌ Invalid period '%s'. Use 'today', 'yesterday', 'week', 'month', or YYYY-MM-DD format\n", period)
 			return
 		}
-		summaries, err = tr.GetDailySummary(date)
-		periodTitle = date.Format("January 2, 2006")
+
+		startDate = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+		endDate = startDate.Add(24 * time.Hour)
+		periodTitle = startDate.Format("January 2, 2006")
 	}
 
+	liveSummary, err := tr.GetDateRangeSummaryWithLive(startDate, endDate)
 	if err != nil {
 		fmt.Printf("❌ Failed to get summary: %v\n", err)
 		return
 	}
 
+	summaries := liveSummary.Summaries
+
 	fmt.Printf("📊 Work Summary - %s\n\n", periodTitle)
 
 	if len(summaries) == 0 {
 		fmt.Println("No work sessions found for this period.")
+
+		fmt.Printf("\nDebug: Looking for sessions in period %s\n", periodTitle)
+		fmt.Printf("Debug: Current branch is '%s'\n", currentBranch)
 		return
 	}
 
@@ -148,6 +156,8 @@ func showPeriodSummary(tr tracker.Tracker, period, currentBranch string) {
 
 	var totalTime, totalActive, totalPauses time.Duration
 	var totalSessions int
+	currentMarked := false
+	liveMarked := false
 
 	for _, summary := range summaries {
 		efficiency := tracker.FormatEfficiency(summary.ActiveTime, summary.TotalTime)
@@ -156,6 +166,11 @@ func showPeriodSummary(tr tracker.Tracker, period, currentBranch string) {
 		branchDisplay := summary.Branch
 		if summary.Branch == currentBranch {
 			branchDisplay = summary.Branch + " *"
+			currentMarked = true
+		}
+		if liveSummary.IncludesActive && summary.Branch == liveSummary.ActiveBranch {
+			branchDisplay += " +"
+			liveMarked = true
 		}
 
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\n",
@@ -185,7 +200,13 @@ func showPeriodSummary(tr tracker.Tracker, period, currentBranch string) {
 
 	w.Flush()
 
-	if len(summaries) > 1 {
-		fmt.Printf("\n* = current branch\n")
+	if currentMarked || liveMarked {
+		fmt.Printf("\n")
+		if currentMarked {
+			fmt.Printf("* = current branch\n")
+		}
+		if liveMarked {
+			fmt.Printf("+ = includes active session time\n")
+		}
 	}
 }

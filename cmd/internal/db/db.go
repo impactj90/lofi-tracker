@@ -31,6 +31,17 @@ type SummaryData struct {
 	EndDate      time.Time
 }
 
+type DebugSession struct {
+	ID        int64
+	Branch    string
+	StartTime string
+	EndTime   *string
+	IsPaused  bool
+	IsAfk     bool
+	CreatedAt string
+	UpdatedAt string
+}
+
 type DB interface {
 	CreateSession(branch string, startTime time.Time) (int64, error)
 	CompleteSession(sessionID int64, endTime time.Time) error
@@ -44,4 +55,7 @@ type DB interface {
 	GetMonthlySummary(year int, month time.Month) ([]SummaryData, error)
 	GetDateRangeSummary(startDate, endDate time.Time) ([]SummaryData, error)
 	GetBranchSummary(branch string, days int) (*SummaryData, error)
+
+	GetAllSessions(limit int) ([]DebugSession, error)
+	GetSessionCount() (int, error)
 }

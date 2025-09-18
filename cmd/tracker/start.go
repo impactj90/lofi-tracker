@@ -25,13 +25,12 @@ var startCmd = &cobra.Command{
 
 		defer tr.Close()
 
-		tr.Start(branchName)
+		err = tr.Start(branchName)
 		if err != nil {
 			fmt.Printf("❌ Failed to start tracking: %v\n", err)
 			return
 		}
 
-		fmt.Printf("✅ Started tracking on branch '%s' at %s\n", branchName, time.Now().UTC().Format(time.RFC3339))
+		fmt.Printf("✅ Started tracking on branch '%s' at %s\n", branchName, time.Now().Local().Format(time.RFC3339))
 	},
 }
-

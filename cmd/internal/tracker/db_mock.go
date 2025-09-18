@@ -10,10 +10,13 @@ type mockDB struct {
 	ActiveSession *db.Session
 	Paused        bool
 	IsAfk         bool
+	Summaries     []db.SummaryData
+	Daily         map[string][]db.SummaryData
 
-	CreateSessionCalled bool
-	PauseSessionCalled  bool
-	ResumeSessionCalled bool
+	CreateSessionCalled   bool
+	CompleteSessionCalled bool
+	PauseSessionCalled    bool
+	ResumeSessionCalled   bool
 }
 
 func (m *mockDB) CreateSession(branch string, startTime time.Time) (int64, error) {
@@ -28,6 +31,11 @@ func (m *mockDB) CreateSession(branch string, startTime time.Time) (int64, error
 }
 
 func (m *mockDB) CompleteSession(sessionID int64, endTime time.Time) error {
+	m.CompleteSessionCalled = true
+	if m.ActiveSession != nil && m.ActiveSession.ID == sessionID {
+		m.ActiveSession.Endtime = &endTime
+		m.ActiveSession = nil
+	}
 	return nil
 }
 
@@ -54,4 +62,41 @@ func (m *mockDB) ResumeSession(sessionID int64, pauseEnd time.Time) error {
 
 func (m *mockDB) Close() error {
 	return nil
+}
+
+func (m *mockDB) GetDailySummary(date time.Time) ([]db.SummaryData, error) {
+	if m.Daily == nil {
+		return nil, nil
+	}
+
+	key := date.Format("2006-01-02")
+	if summaries, ok := m.Daily[key]; ok {
+		return summaries, nil
+	}
+
+	return nil, nil
+}
+
+func (m *mockDB) GetWeeklySummary(time.Time) ([]db.SummaryData, error) {
+	return nil, nil
+}
+
+func (m *mockDB) GetMonthlySummary(int, time.Month) ([]db.SummaryData, error) {
+	return nil, nil
+}
+
+func (m *mockDB) GetDateRangeSummary(time.Time, time.Time) ([]db.SummaryData, error) {
+	return m.Summaries, nil
+}
+
+func (m *mockDB) GetBranchSummary(string, int) (*db.SummaryData, error) {
+	return nil, nil
+}
+
+func (m *mockDB) GetAllSessions(int) ([]db.DebugSession, error) {
+	return nil, nil
+}
+
+func (m *mockDB) GetSessionCount() (int, error) {
+	return 0, nil
 }

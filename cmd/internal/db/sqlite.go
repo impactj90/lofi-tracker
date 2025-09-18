@@ -12,7 +12,8 @@ import (
 )
 
 type sqliteDB struct {
-	db *sql.DB
+	db    *sql.DB
+	clock func() time.Time
 }
 
 func NewSQLiteDB(dbPath string) (DB, error) {
@@ -26,7 +27,12 @@ func NewSQLiteDB(dbPath string) (DB, error) {
 		return nil, ErrFailedToOpenDatabase
 	}
 
-	sdb := &sqliteDB{db: db}
+	sdb := &sqliteDB{
+		db: db,
+		clock: func() time.Time {
+			return time.Now().UTC()
+		},
+	}
 	if err := sdb.migrate(); err != nil {
 		fmt.Printf("❌ Failed to migrate database: %v\n", err)
 		return nil, ErrFailedToMigrateDatabase
@@ -159,11 +165,18 @@ func (s *sqliteDB) ResumeSession(sessionID int64, pauseEnd time.Time) error {
 	return nil
 }
 
+func (s *sqliteDB) now() time.Time {
+	if s.clock != nil {
+		return s.clock()
+	}
+	return time.Now().UTC()
+}
+
 // GetDailySummary returns work summary for a specific date
 func (s *sqliteDB) GetDailySummary(date time.Time) ([]SummaryData, error) {
 	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
 	endOfDay := startOfDay.Add(24 * time.Hour)
-	
+
 	return s.GetDateRangeSummary(startOfDay, endOfDay)
 }
 
@@ -177,52 +190,64 @@ func (s *sqliteDB) GetWeeklySummary(startOfWeek time.Time) ([]SummaryData, error
 func (s *sqliteDB) GetMonthlySummary(year int, month time.Month) ([]SummaryData, error) {
 	startOfMonth := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
 	endOfMonth := startOfMonth.AddDate(0, 1, 0)
-	
+
 	return s.GetDateRangeSummary(startOfMonth, endOfMonth)
 }
 
 // GetDateRangeSummary returns work summary for a date range, grouped by branch
 func (s *sqliteDB) GetDateRangeSummary(startDate, endDate time.Time) ([]SummaryData, error) {
+	now := s.now()
+
 	query := `
-	SELECT 
-		s.branch,
-		COUNT(s.id) as session_count,
-		MIN(s.start_time) as earliest_start,
-		MAX(COALESCE(s.end_time, datetime('now'))) as latest_end,
-		-- Total session time (from start to end, including pauses)
-		SUM(
-			CASE 
-				WHEN s.end_time IS NOT NULL 
-				THEN (julianday(s.end_time) - julianday(s.start_time)) * 86400
-				ELSE (julianday('now') - julianday(s.start_time)) * 86400
-			END
-		) as total_seconds,
-		-- Total pause time
-		COALESCE(SUM(
-			CASE 
-				WHEN p.pause_end IS NOT NULL 
-				THEN (julianday(p.pause_end) - julianday(p.pause_start)) * 86400
-				ELSE 0
-			END
-		), 0) as pause_seconds
-	FROM sessions s
-	LEFT JOIN pauses p ON s.id = p.session_id
-	WHERE s.start_time >= ? AND s.start_time < ?
-	GROUP BY s.branch
-	ORDER BY s.branch`
-	
-	rows, err := s.db.Query(query, startDate, endDate)
+WITH session_totals AS (
+    SELECT 
+        s.id,
+        s.branch,
+        s.start_time,
+        COALESCE(s.end_time, ?) AS computed_end,
+        (julianday(COALESCE(s.end_time, ?)) - julianday(s.start_time)) * 86400 AS total_seconds
+    FROM sessions s
+    WHERE s.start_time >= ? AND s.start_time < ?
+),
+pause_totals AS (
+    SELECT 
+        s.id,
+        SUM(
+            CASE
+                WHEN p.id IS NULL THEN 0
+                WHEN p.pause_end IS NOT NULL THEN (julianday(p.pause_end) - julianday(p.pause_start)) * 86400
+                ELSE (julianday(?) - julianday(p.pause_start)) * 86400
+            END
+        ) AS pause_seconds
+    FROM sessions s
+    LEFT JOIN pauses p ON s.id = p.session_id
+    WHERE s.start_time >= ? AND s.start_time < ?
+    GROUP BY s.id
+)
+SELECT
+    st.branch,
+    COUNT(st.id) AS session_count,
+    MIN(st.start_time) AS earliest_start,
+    MAX(st.computed_end) AS latest_end,
+    SUM(st.total_seconds) AS total_seconds,
+    SUM(COALESCE(pt.pause_seconds, 0)) AS pause_seconds
+FROM session_totals st
+LEFT JOIN pause_totals pt ON st.id = pt.id
+GROUP BY st.branch
+ORDER BY st.branch`
+
+	rows, err := s.db.Query(query, now, now, startDate, endDate, now, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var summaries []SummaryData
 	for rows.Next() {
 		var summary SummaryData
 		var totalSeconds, pauseSeconds float64
 		var earliestStart, latestEnd string
-		
+
 		err := rows.Scan(
 			&summary.Branch,
 			&summary.SessionCount,
@@ -234,87 +259,117 @@ func (s *sqliteDB) GetDateRangeSummary(startDate, endDate time.Time) ([]SummaryD
 		if err != nil {
 			return nil, err
 		}
-		
-		// Parse times
-		summary.StartDate, _ = time.Parse("2006-01-02 15:04:05", earliestStart)
-		summary.EndDate, _ = time.Parse("2006-01-02 15:04:05", latestEnd)
-		
+
+		summary.StartDate, err = parseFlexibleTime(earliestStart)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse start date '%s': %w", earliestStart, err)
+		}
+
+		summary.EndDate, err = parseFlexibleTime(latestEnd)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse end date '%s': %w", latestEnd, err)
+		}
+
 		// Convert seconds to durations
 		summary.TotalTime = time.Duration(totalSeconds) * time.Second
 		summary.PauseTime = time.Duration(pauseSeconds) * time.Second
 		summary.ActiveTime = summary.TotalTime - summary.PauseTime
-		
-		// For now, we'll calculate AFK time separately if needed
-		// This would require more complex queries to distinguish AFK vs manual pauses
 		summary.AfkTime = 0
-		
+
 		summaries = append(summaries, summary)
 	}
-	
+
 	return summaries, nil
 }
 
-// GetBranchSummary returns summary for a specific branch over the last N days
-func (s *sqliteDB) GetBranchSummary(branch string, days int) (*SummaryData, error) {
-	startDate := time.Now().UTC().AddDate(0, 0, -days)
-	endDate := time.Now().UTC()
-	
-	query := `
-	SELECT 
-		s.branch,
-		COUNT(s.id) as session_count,
-		MIN(s.start_time) as earliest_start,
-		MAX(COALESCE(s.end_time, datetime('now'))) as latest_end,
-		SUM(
-			CASE 
-				WHEN s.end_time IS NOT NULL 
-				THEN (julianday(s.end_time) - julianday(s.start_time)) * 86400
-				ELSE (julianday('now') - julianday(s.start_time)) * 86400
-			END
-		) as total_seconds,
-		COALESCE(SUM(
-			CASE 
-				WHEN p.pause_end IS NOT NULL 
-				THEN (julianday(p.pause_end) - julianday(p.pause_start)) * 86400
-				ELSE 0
-			END
-		), 0) as pause_seconds
-	FROM sessions s
-	LEFT JOIN pauses p ON s.id = p.session_id
-	WHERE s.branch = ? AND s.start_time >= ? AND s.start_time < ?
-	GROUP BY s.branch`
-	
-	var summary SummaryData
-	var totalSeconds, pauseSeconds float64
-	var earliestStart, latestEnd string
-	
-	err := s.db.QueryRow(query, branch, startDate, endDate).Scan(
-		&summary.Branch,
-		&summary.SessionCount,
-		&earliestStart,
-		&latestEnd,
-		&totalSeconds,
-		&pauseSeconds,
-	)
-	
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return &SummaryData{Branch: branch}, nil
+// Add this helper function to handle different time formats
+func parseFlexibleTime(timeStr string) (time.Time, error) {
+	// Try different time formats that SQLite might return
+	formats := []string{
+		"2006-01-02 15:04:05.999999999-07:00", // With timezone and nanoseconds
+		"2006-01-02 15:04:05.999999999+00:00", // UTC with nanoseconds
+		"2006-01-02 15:04:05-07:00",           // With timezone
+		"2006-01-02 15:04:05+00:00",           // UTC
+		"2006-01-02 15:04:05.999999999",       // No timezone, with nanoseconds
+		"2006-01-02 15:04:05",                 // Basic format
+		time.RFC3339Nano,                      // Standard RFC3339 with nanoseconds
+		time.RFC3339,                          // Standard RFC3339
+	}
+
+	for _, format := range formats {
+		if t, err := time.Parse(format, timeStr); err == nil {
+			return t.UTC(), nil
 		}
+	}
+
+	return time.Time{}, fmt.Errorf("unable to parse time string: %s", timeStr)
+}
+
+func (s *sqliteDB) GetBranchSummary(branch string, days int) (*SummaryData, error) {
+	endDate := s.now()
+	startDate := endDate.AddDate(0, 0, -days)
+
+	summaries, err := s.GetDateRangeSummary(startDate, endDate)
+	if err != nil {
 		return nil, err
 	}
-	
-	// Parse times
-	summary.StartDate, _ = time.Parse("2006-01-02 15:04:05", earliestStart)
-	summary.EndDate, _ = time.Parse("2006-01-02 15:04:05", latestEnd)
-	
-	// Convert to durations
-	summary.TotalTime = time.Duration(totalSeconds) * time.Second
-	summary.PauseTime = time.Duration(pauseSeconds) * time.Second
-	summary.ActiveTime = summary.TotalTime - summary.PauseTime
-	summary.AfkTime = 0 // Would need additional logic to track AFK specifically
-	
-	return &summary, nil
+
+	for _, summary := range summaries {
+		if summary.Branch == branch {
+			result := summary
+			return &result, nil
+		}
+	}
+
+	return &SummaryData{Branch: branch}, nil
+}
+
+func (s *sqliteDB) GetAllSessions(limit int) ([]DebugSession, error) {
+	query := `
+	SELECT id, branch, start_time, end_time, is_paused, is_afk, created_at, updated_at
+	FROM sessions 
+	ORDER BY created_at DESC
+	LIMIT ?`
+
+	rows, err := s.db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []DebugSession
+	for rows.Next() {
+		var session DebugSession
+		var endTime sql.NullString
+
+		err := rows.Scan(
+			&session.ID,
+			&session.Branch,
+			&session.StartTime,
+			&endTime,
+			&session.IsPaused,
+			&session.IsAfk,
+			&session.CreatedAt,
+			&session.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if endTime.Valid {
+			session.EndTime = &endTime.String
+		}
+
+		sessions = append(sessions, session)
+	}
+
+	return sessions, nil
+}
+
+func (s *sqliteDB) GetSessionCount() (int, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM sessions").Scan(&count)
+	return count, err
 }
 
 func (s *sqliteDB) Close() error {
